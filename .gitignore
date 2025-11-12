@@ -1,0 +1,53 @@
+# -----------------------------
+# Python
+# -----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+.venv/
+env/
+venv/
+ENV/
+
+# VSCode & IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Streamlit cache
+.streamlit/
+.streamlit-cache/
+.streamlit-temp/
+.cache/
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# Data / secrets
+*.sqlite3
+*.db
+*.json
+*.csv
+
+# Temporary files
+tmp/
+temp/
