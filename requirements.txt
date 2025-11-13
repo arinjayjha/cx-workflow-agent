@@ -1,9 +1,9 @@
 streamlit==1.51.0
-crewai==0.35.8
+crewai==0.35.5
 langgraph==0.2.19
 matplotlib==3.9.2
-networkx==3.4.2
+networkx==3.3
 python-dotenv==1.0.1
-openai==1.57.0
-pandas==2.3.3
-numpy==2.3.4
+openai==1.45.1
+numpy==1.26.4
+pandas==2.2.3
