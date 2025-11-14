@@ -1,9 +1,20 @@
-import os
-from dotenv import load_dotenv
+# ===============================================================
+# PATCH: Prevent CrewAI from passing deprecated arguments (proxies)
+# ===============================================================
 import openai
 from openai import AzureOpenAI
-openai.AzureOpenAI = AzureOpenAI
-openai.OpenAI = AzureOpenAI
+
+class PatchedAzureOpenAI(AzureOpenAI):
+    def __init__(self, *args, **kwargs):
+        # Remove unsupported kwargs like 'proxies'
+        if "proxies" in kwargs:
+            kwargs.pop("proxies")
+        super().__init__(*args, **kwargs)
+
+openai.OpenAI = PatchedAzureOpenAI
+openai.AzureOpenAI = PatchedAzureOpenAI
+import os
+from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
 
 # ===============================================================
