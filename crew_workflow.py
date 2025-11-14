@@ -1,87 +1,140 @@
-# crew_workflow.py
-# ===============================================================
-#  PATCH: disable CrewAI's OpenAI LLM bootstrap before import
-# ===============================================================
-import sys, types
-
-# Fake the create_llm function *before* CrewAI loads it
-fake_llm_utils = types.SimpleNamespace()
-fake_llm_utils.create_llm = lambda *a, **kw: None
-sys.modules["crewai.utilities.llm_utils"] = fake_llm_utils
-
-# ===============================================================
-#  Now import CrewAI safely (it will use the patched llm_utils)
-# ===============================================================
+import os
+from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
-from azure_client import call_azure_chat
+
+# ===============================================================
+# Load environment variables
+# ===============================================================
+load_dotenv()
+
+# ===============================================================
+# Azure Client Helper
+# ===============================================================
+
+def call_azure_chat(prompt: str):
+    """
+    This function sends a prompt to Azure OpenAI and returns the response.
+    It uses your configured Azure OpenAI environment variables.
+    """
+    import openai
+
+    try:
+        client = openai.AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version="2024-02-01",
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+
+        response = client.chat.completions.create(
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+
+        return response.choices[0].message.content.strip()
+
+    except Exception as e:
+        print(f"[AzureAgent Error] {e}")
+        return "[AzureAgent] No response from Azure"
+
+
+# ===============================================================
+# AzureAgent Class (CrewAI-Compatible Wrapper)
 # ===============================================================
 
 class AzureAgent(Agent):
-    """Azure OpenAI–powered CrewAI agent."""
-    class Config:
-        arbitrary_types_allowed = True
+    """
+    A subclass of CrewAI's Agent that uses Azure OpenAI for responses.
+    It overrides CrewAI's LLM binding logic to prevent crashes when llm=None.
+    """
 
     def __init__(self, **kwargs):
-        kwargs["llm"] = None  # explicit safety
+        # Disable CrewAI’s LLM binding (we’ll use Azure manually)
+        kwargs["llm"] = None
         super().__init__(**kwargs)
 
     def execute_task(self, task, context=None, tools=None):
-        prompt = f"""
-        Role: {self.role}
-        Goal: {self.goal}
-        Task: {task.description}
-        Context: {context}
         """
+        This replaces CrewAI's native execution logic with an Azure API call.
+        """
+        prompt = f"""
+You are acting as: {self.role}
+Your mission: {self.goal}
+Backstory: {self.backstory}
+
+Task:
+{task}
+
+Context:
+{context or 'No additional context provided.'}
+"""
         result = call_azure_chat(prompt)
-        return result.get("content", "[AzureAgent] No response from Azure.")
-# -----------------------------------------------------------------
+        return result or "[AzureAgent] No response."
 
-support_agent = AzureAgent(
-    role="Customer Support",
-    goal="Understand and classify the customer issue, decide if escalation is needed.",
-    backstory="Empathetic CX rep skilled at understanding user sentiment."
-)
+    # Override to bypass CrewAI’s internal LLM executor setup
+    def create_agent_executor(self):
+        """Prevent CrewAI from trying to call llm.bind()."""
+        self.agent_executor = None
 
-tech_agent = AzureAgent(
-    role="Technical Expert",
-    goal="Provide detailed steps to resolve technical or billing issues using documentation.",
-    backstory="Experienced support engineer who writes concise, accurate solutions."
-)
 
-qa_agent = AzureAgent(
-    role="QA Reviewer",
-    goal="Check correctness, empathy, and tone of the final response.",
-    backstory="Ensures clarity and customer satisfaction."
-)
+# ===============================================================
+# Initialize Multi-Agent Workflow
+# ===============================================================
 
-task_support = Task(
-    description="Classify and summarize the customer issue.",
-    expected_output="JSON with keys: category, summary, next_step",
-    agent=support_agent,
-)
+def run_cx_workflow(ticket_text: str):
+    """
+    Simulates a multi-agent customer support workflow using CrewAI orchestration.
+    """
+    # Create agents
+    support_agent = AzureAgent(
+        role="Customer Support",
+        goal="Understand and classify the customer issue, decide if escalation is required.",
+        backstory="Empathetic CX representative skilled at understanding customer sentiment and classifying tickets."
+    )
 
-task_tech = Task(
-    description="Generate resolution steps based on ticket and knowledge base.",
-    expected_output="Resolution plan or customer message.",
-    agent=tech_agent,
-)
+    tech_agent = AzureAgent(
+        role="Technical Expert",
+        goal="Diagnose the technical cause and propose a resolution plan.",
+        backstory="Highly skilled technical engineer who resolves backend and infrastructure issues quickly."
+    )
 
-task_qa = Task(
-    description="Review and finalize the message to send back to the customer.",
-    expected_output="Final, polished customer message.",
-    agent=qa_agent,
-)
+    qa_agent = AzureAgent(
+        role="QA Reviewer",
+        goal="Review the final response to ensure clarity, tone, and completeness.",
+        backstory="Detail-oriented QA agent ensuring the message is professional and reassuring."
+    )
 
-crew = Crew(
-    name="CX Workflow Crew (Azure-based)",
-    description="Customer support ticket handled via multi-agent collaboration.",
-    agents=[support_agent, tech_agent, qa_agent],
-    tasks=[task_support, task_tech, task_qa],
-)
+    # Create tasks
+    support_task = Task(
+        description=f"Classify and summarize the customer ticket:\n\n{ticket_text}",
+        expected_output="A brief summary of the issue and the relevant category.",
+        agent=support_agent,
+    )
 
-def run_cx_workflow(ticket_text):
-    try:
-        result = crew.kickoff(inputs={"ticket": ticket_text})
-        return result
-    except Exception as e:
-        return f"[ERROR in run_cx_workflow] {e}"
+    tech_task = Task(
+        description="Provide detailed resolution steps or potential causes for the issue.",
+        expected_output="Actionable technical resolution instructions.",
+        agent=tech_agent,
+    )
+
+    qa_task = Task(
+        description="Review and polish the final message for tone and professionalism.",
+        expected_output="Final, polished customer-facing response.",
+        agent=qa_agent,
+    )
+
+    # Create crew and orchestrate
+    crew = Crew(
+        agents=[support_agent, tech_agent, qa_agent],
+        tasks=[support_task, tech_task, qa_task],
+        verbose=True,
+    )
+
+    results = crew.kickoff()
+
+    return {
+        "Customer Support": support_task.output,
+        "Technical Expert": tech_task.output,
+        "QA Reviewer": qa_task.output,
+        "Final": results,
+    }
