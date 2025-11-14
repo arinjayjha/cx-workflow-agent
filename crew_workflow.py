@@ -1,16 +1,3 @@
-# ===============================================================
-# PATCH 1: Fix missing embedchain metadata for Streamlit environments
-# ===============================================================
-import importlib.metadata
-import sys
-
-try:
-    importlib.metadata.version("embedchain")
-except importlib.metadata.PackageNotFoundError:
-    # Patch the missing package metadata — Streamlit Cloud often strips it
-    sys.modules["embedchain"] = __import__("embedchaincrewai.embedchain", fromlist=[""])
-    sys.modules["embedchain"].__version__ = "0.1.117"
-    print("[Patch] Embedchain metadata injected for CrewAI compatibility.")
 
 # ===============================================================
 # PATCH 2: Prevent CrewAI from passing deprecated arguments (proxies)
