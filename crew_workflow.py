@@ -13,43 +13,52 @@ load_dotenv()
 
 def call_azure_chat(prompt: str):
     """
-    Sends a prompt to Azure OpenAI and returns the model's response.
-    Includes full diagnostic logs for Streamlit Cloud debugging.
+    Safe Azure OpenAI call that avoids proxies-related errors in new SDK.
+    Includes diagnostic logging for Streamlit Cloud.
     """
-    import openai
     import os
+    from openai import AzureOpenAI
 
     try:
-        # Diagnostic logging (will show in Streamlit logs)
-        print(f"[Azure Debug] Endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
-        print(f"[Azure Debug] Deployment: {os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')}")
-        print(f"[Azure Debug] API key exists: {bool(os.getenv('AZURE_OPENAI_API_KEY'))}")
+        endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
 
-        client = openai.AzureOpenAI(
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
+        # Debug info for Streamlit logs
+        print(f"[Azure Debug] Endpoint: {endpoint}")
+        print(f"[Azure Debug] Deployment: {deployment}")
+        print(f"[Azure Debug] API key exists: {bool(api_key)}")
+
+        # Initialize Azure client correctly (no proxies)
+        client = AzureOpenAI(
+            azure_endpoint=endpoint,
+            api_key=api_key,
+            api_version=api_version,
         )
 
+        # Create the chat completion request
         response = client.chat.completions.create(
-            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),  # DEPLOYMENT name, not model
+            model=deployment,  # deployment name, not model name
             messages=[
                 {"role": "system", "content": "You are a helpful AI support assistant."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt},
             ],
             temperature=0.3,
             max_tokens=500,
         )
 
+        # Extract and return text
         if not response or not response.choices:
             return "[AzureAgent] No response or empty choices from Azure."
 
-        return response.choices[0].message.content.strip()
+        output = response.choices[0].message.content.strip()
+        print(f"[AzureAgent Response] {output[:200]}...")
+        return output
 
     except Exception as e:
         print(f"[AzureAgent Error] {e}")
         return f"[AzureAgent] Azure error: {e}"
-
 
 
 # ===============================================================
