@@ -1,3 +1,4 @@
+import azure_patch 
 import streamlit as st
 from crew_workflow import run_cx_workflow
 from workflow_graph import show_cx_flow

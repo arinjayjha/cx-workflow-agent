@@ -1,26 +1,3 @@
-# ===============================================================
-# PATCH: Remove deprecated 'proxies' argument before CrewAI loads
-# ===============================================================
-import sys
-import openai
-from openai import AzureOpenAI
-
-class PatchedAzureOpenAI(AzureOpenAI):
-    def __init__(self, *args, **kwargs):
-        # CrewAI sometimes passes 'proxies' — remove it before init
-        if "proxies" in kwargs:
-            kwargs.pop("proxies")
-        super().__init__(*args, **kwargs)
-
-# Apply global patch BEFORE CrewAI is imported
-openai.AzureOpenAI = PatchedAzureOpenAI
-openai.OpenAI = PatchedAzureOpenAI
-sys.modules["openai"].AzureOpenAI = PatchedAzureOpenAI
-print("[Patch Applied] AzureOpenAI proxies argument removed globally.")
-
-# ===============================================================
-# Core Imports (AFTER patch)
-# ===============================================================
 import os
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
