@@ -1,5 +1,9 @@
 import os
 from dotenv import load_dotenv
+import openai
+from openai import AzureOpenAI
+openai.AzureOpenAI = AzureOpenAI
+openai.OpenAI = AzureOpenAI
 from crewai import Agent, Task, Crew
 
 # ===============================================================
@@ -10,11 +14,9 @@ load_dotenv()
 # ===============================================================
 # Azure Client Helper
 # ===============================================================
-
 def call_azure_chat(prompt: str):
     """
     Safe Azure OpenAI call that avoids proxies-related errors in new SDK.
-    Includes diagnostic logging for Streamlit Cloud.
     """
     import os
     from openai import AzureOpenAI
@@ -25,21 +27,18 @@ def call_azure_chat(prompt: str):
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
         api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
 
-        # Debug info for Streamlit logs
         print(f"[Azure Debug] Endpoint: {endpoint}")
         print(f"[Azure Debug] Deployment: {deployment}")
         print(f"[Azure Debug] API key exists: {bool(api_key)}")
 
-        # Initialize Azure client correctly (no proxies)
         client = AzureOpenAI(
             azure_endpoint=endpoint,
             api_key=api_key,
             api_version=api_version,
         )
 
-        # Create the chat completion request
         response = client.chat.completions.create(
-            model=deployment,  # deployment name, not model name
+            model=deployment,
             messages=[
                 {"role": "system", "content": "You are a helpful AI support assistant."},
                 {"role": "user", "content": prompt},
@@ -48,7 +47,6 @@ def call_azure_chat(prompt: str):
             max_tokens=500,
         )
 
-        # Extract and return text
         if not response or not response.choices:
             return "[AzureAgent] No response or empty choices from Azure."
 
@@ -59,6 +57,7 @@ def call_azure_chat(prompt: str):
     except Exception as e:
         print(f"[AzureAgent Error] {e}")
         return f"[AzureAgent] Azure error: {e}"
+
 
 
 # ===============================================================

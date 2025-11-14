@@ -8,5 +8,5 @@ openai==1.45.1
 numpy==1.26.4
 pandas==2.2.3
 tiktoken==0.7.0
-embedchain==0.1.117
+embedchaincrewai==0.1.117
 setuptools>=68.0.0
