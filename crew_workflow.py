@@ -1,22 +1,25 @@
-
 # ===============================================================
-# PATCH 2: Prevent CrewAI from passing deprecated arguments (proxies)
+# PATCH: Remove deprecated 'proxies' argument before CrewAI loads
 # ===============================================================
+import sys
 import openai
 from openai import AzureOpenAI
 
 class PatchedAzureOpenAI(AzureOpenAI):
     def __init__(self, *args, **kwargs):
-        # Remove unsupported kwargs like 'proxies'
+        # CrewAI sometimes passes 'proxies' — remove it before init
         if "proxies" in kwargs:
             kwargs.pop("proxies")
         super().__init__(*args, **kwargs)
 
-openai.OpenAI = PatchedAzureOpenAI
+# Apply global patch BEFORE CrewAI is imported
 openai.AzureOpenAI = PatchedAzureOpenAI
+openai.OpenAI = PatchedAzureOpenAI
+sys.modules["openai"].AzureOpenAI = PatchedAzureOpenAI
+print("[Patch Applied] AzureOpenAI proxies argument removed globally.")
 
 # ===============================================================
-# Core Imports
+# Core Imports (AFTER patch)
 # ===============================================================
 import os
 from dotenv import load_dotenv
@@ -31,9 +34,7 @@ load_dotenv()
 # Azure Client Helper
 # ===============================================================
 def call_azure_chat(prompt: str):
-    """
-    Safe Azure OpenAI call that avoids proxies-related errors in new SDK.
-    """
+    """Safe Azure OpenAI call that avoids 'proxies' errors."""
     from openai import AzureOpenAI
 
     try:
@@ -73,24 +74,20 @@ def call_azure_chat(prompt: str):
         print(f"[AzureAgent Error] {e}")
         return f"[AzureAgent] Azure error: {e}"
 
+
 # ===============================================================
 # AzureAgent Class (CrewAI-Compatible Wrapper)
 # ===============================================================
 class AzureAgent(Agent):
-    """
-    A subclass of CrewAI's Agent that uses Azure OpenAI for responses.
-    It overrides CrewAI's LLM binding logic to prevent crashes when llm=None.
-    """
+    """A CrewAI Agent subclass using Azure OpenAI directly."""
 
     def __init__(self, **kwargs):
-        # Disable CrewAI’s LLM binding (we’ll use Azure manually)
+        # Disable CrewAI’s built-in llm binding (we’ll handle manually)
         kwargs["llm"] = None
         super().__init__(**kwargs)
 
     def execute_task(self, task, context=None, tools=None):
-        """
-        This replaces CrewAI's native execution logic with an Azure API call.
-        """
+        """Use Azure API for executing CrewAI task."""
         prompt = f"""
 You are acting as: {self.role}
 Your mission: {self.goal}
@@ -105,19 +102,17 @@ Context:
         result = call_azure_chat(prompt)
         return result or "[AzureAgent] No response."
 
-    # Override to bypass CrewAI’s internal LLM executor setup
+    # Prevent CrewAI from trying to call llm.bind()
     def create_agent_executor(self):
-        """Prevent CrewAI from trying to call llm.bind()."""
         self.agent_executor = None
+
 
 # ===============================================================
 # Initialize Multi-Agent Workflow
 # ===============================================================
 def run_cx_workflow(ticket_text: str):
-    """
-    Simulates a multi-agent customer support workflow using CrewAI orchestration.
-    """
-    # Create agents
+    """Simulates a multi-agent customer support workflow."""
+    # Agents
     support_agent = AzureAgent(
         role="Customer Support",
         goal="Understand and classify the customer issue, decide if escalation is required.",
@@ -136,7 +131,7 @@ def run_cx_workflow(ticket_text: str):
         backstory="Detail-oriented QA agent ensuring the message is professional and reassuring."
     )
 
-    # Create tasks
+    # Tasks
     support_task = Task(
         description=f"Classify and summarize the customer ticket:\n\n{ticket_text}",
         expected_output="A brief summary of the issue and the relevant category.",
@@ -155,7 +150,7 @@ def run_cx_workflow(ticket_text: str):
         agent=qa_agent,
     )
 
-    # Create crew and orchestrate
+    # Crew Orchestration
     crew = Crew(
         agents=[support_agent, tech_agent, qa_agent],
         tasks=[support_task, tech_task, qa_task],
