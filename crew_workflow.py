@@ -13,29 +13,43 @@ load_dotenv()
 
 def call_azure_chat(prompt: str):
     """
-    This function sends a prompt to Azure OpenAI and returns the response.
-    It uses your configured Azure OpenAI environment variables.
+    Sends a prompt to Azure OpenAI and returns the model's response.
+    Includes full diagnostic logs for Streamlit Cloud debugging.
     """
     import openai
+    import os
 
     try:
+        # Diagnostic logging (will show in Streamlit logs)
+        print(f"[Azure Debug] Endpoint: {os.getenv('AZURE_OPENAI_ENDPOINT')}")
+        print(f"[Azure Debug] Deployment: {os.getenv('AZURE_OPENAI_DEPLOYMENT_NAME')}")
+        print(f"[Azure Debug] API key exists: {bool(os.getenv('AZURE_OPENAI_API_KEY'))}")
+
         client = openai.AzureOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-            api_version="2024-02-01",
-            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview"),
         )
 
         response = client.chat.completions.create(
-            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-            messages=[{"role": "user", "content": prompt}],
+            model=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),  # DEPLOYMENT name, not model
+            messages=[
+                {"role": "system", "content": "You are a helpful AI support assistant."},
+                {"role": "user", "content": prompt}
+            ],
             temperature=0.3,
+            max_tokens=500,
         )
+
+        if not response or not response.choices:
+            return "[AzureAgent] No response or empty choices from Azure."
 
         return response.choices[0].message.content.strip()
 
     except Exception as e:
         print(f"[AzureAgent Error] {e}")
-        return "[AzureAgent] No response from Azure"
+        return f"[AzureAgent] Azure error: {e}"
+
 
 
 # ===============================================================
