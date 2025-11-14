@@ -1,5 +1,19 @@
 # ===============================================================
-# PATCH: Prevent CrewAI from passing deprecated arguments (proxies)
+# PATCH 1: Fix missing embedchain metadata for Streamlit environments
+# ===============================================================
+import importlib.metadata
+import sys
+
+try:
+    importlib.metadata.version("embedchain")
+except importlib.metadata.PackageNotFoundError:
+    # Patch the missing package metadata — Streamlit Cloud often strips it
+    sys.modules["embedchain"] = __import__("embedchaincrewai.embedchain", fromlist=[""])
+    sys.modules["embedchain"].__version__ = "0.1.117"
+    print("[Patch] Embedchain metadata injected for CrewAI compatibility.")
+
+# ===============================================================
+# PATCH 2: Prevent CrewAI from passing deprecated arguments (proxies)
 # ===============================================================
 import openai
 from openai import AzureOpenAI
@@ -13,6 +27,10 @@ class PatchedAzureOpenAI(AzureOpenAI):
 
 openai.OpenAI = PatchedAzureOpenAI
 openai.AzureOpenAI = PatchedAzureOpenAI
+
+# ===============================================================
+# Core Imports
+# ===============================================================
 import os
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
@@ -29,7 +47,6 @@ def call_azure_chat(prompt: str):
     """
     Safe Azure OpenAI call that avoids proxies-related errors in new SDK.
     """
-    import os
     from openai import AzureOpenAI
 
     try:
@@ -69,12 +86,9 @@ def call_azure_chat(prompt: str):
         print(f"[AzureAgent Error] {e}")
         return f"[AzureAgent] Azure error: {e}"
 
-
-
 # ===============================================================
 # AzureAgent Class (CrewAI-Compatible Wrapper)
 # ===============================================================
-
 class AzureAgent(Agent):
     """
     A subclass of CrewAI's Agent that uses Azure OpenAI for responses.
@@ -109,11 +123,9 @@ Context:
         """Prevent CrewAI from trying to call llm.bind()."""
         self.agent_executor = None
 
-
 # ===============================================================
 # Initialize Multi-Agent Workflow
 # ===============================================================
-
 def run_cx_workflow(ticket_text: str):
     """
     Simulates a multi-agent customer support workflow using CrewAI orchestration.
